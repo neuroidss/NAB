@@ -1,19 +1,12 @@
-
-
 """
-This is no man's land. Do anything you want in here,
-as long as you return a boolean that determines whether the input
-timeseries is anomalous or not.
-
-To add an algorithm, define it here, and add its name to settings.ALGORITHMS.
+Some algorithms from the original skyline implementation are commented out and
+the best combination of algorithms for NAB is included below.
 """
-
-import pandas
-import numpy as np
-import traceback
-from time import time
 
 from datetime import datetime, timedelta
+
+import numpy as np
+import pandas
 
 
 
@@ -31,6 +24,7 @@ def tail_avg(timeseries):
     return timeseries[-1][1]
 
 
+
 def median_absolute_deviation(timeseries):
   """
   A timeseries is anomalous if the deviation of its latest datapoint with
@@ -42,13 +36,12 @@ def median_absolute_deviation(timeseries):
   demedianed = np.abs(series - median)
   median_deviation = demedianed.median()
 
-
   # The test statistic is infinite when the median is zero,
   # so it becomes super sensitive. We play it safe and skip when this happens.
   if median_deviation == 0:
     return False
 
-  test_statistic = demedianed.iget(-1) / median_deviation
+  test_statistic = demedianed.iloc[-1] / median_deviation
 
   # Completely arbitary...triggers if the median deviation is
   # 6 times bigger than the median
@@ -58,6 +51,8 @@ def median_absolute_deviation(timeseries):
     return False
 
 
+
+# The method below is excluded because it is computationally inefficient
 # def grubbs(timeseries):
 #     """
 #     A timeseries is anomalous if the Z score is greater than the Grubb's
@@ -73,7 +68,7 @@ def median_absolute_deviation(timeseries):
 #     threshold = scipy.stats.t.isf(.05 / (2 * len_series), len_series - 2)
 #     threshold_squared = threshold * threshold
 #     grubbs_score = ((len_series - 1) / np.sqrt(len_series)) * np.sqrt(
-  # threshold_squared / (len_series - 2 + threshold_squared))
+#   threshold_squared / (len_series - 2 + threshold_squared))
 
 #     return z_score > grubbs_score
 
@@ -98,6 +93,7 @@ def first_hour_average(timeseries):
   return abs(t - mean) > 3 * stdDev
 
 
+
 def stddev_from_average(timeseries):
   """
   A timeseries is anomalous if the absolute value of the average of the latest
@@ -113,6 +109,7 @@ def stddev_from_average(timeseries):
   return abs(t - mean) > 3 * stdDev
 
 
+
 def stddev_from_moving_average(timeseries):
   """
   A timeseries is anomalous if the absolute value of the average of the latest
@@ -121,10 +118,11 @@ def stddev_from_moving_average(timeseries):
   respect to the short term trends.
   """
   series = pandas.Series([x[1] for x in timeseries])
-  expAverage = pandas.stats.moments.ewma(series, com=50)
-  stdDev = pandas.stats.moments.ewmstd(series, com=50)
+  expAverage = series.ewm(ignore_na=False, min_periods=0, adjust=True, com=50).mean()
+  stdDev = series.ewm(ignore_na=False, min_periods=0, adjust=True, com=50).std(bias=False)
 
-  return abs(series.iget(-1) - expAverage.iget(-1)) > 3 * stdDev.iget(-1)
+  return abs(series.iloc[-1] - expAverage.iloc[-1]) > 3 * stdDev.iloc[-1]
+
 
 
 def mean_subtraction_cumulation(timeseries):
@@ -137,9 +135,9 @@ def mean_subtraction_cumulation(timeseries):
   series = pandas.Series([x[1] if x[1] else 0 for x in timeseries])
   series = series - series[0:len(series) - 1].mean()
   stdDev = series[0:len(series) - 1].std()
-  expAverage = pandas.stats.moments.ewma(series, com=15)
 
-  return abs(series.iget(-1)) > 3 * stdDev
+  return abs(series.iloc[-1]) > 3 * stdDev
+
 
 
 def least_squares(timeseries):
@@ -149,7 +147,7 @@ def least_squares(timeseries):
   """
 
   x = np.array(
-    [(t[0] - datetime(1970,1,1)).total_seconds() for t in timeseries])
+    [(t[0] - datetime(1970, 1, 1)).total_seconds() for t in timeseries])
   y = np.array([t[1] for t in timeseries])
   A = np.vstack([x, np.ones(len(x))]).T
   results = np.linalg.lstsq(A, y)
@@ -198,6 +196,7 @@ def histogram_bins(timeseries):
   return False
 
 
+# The method below is excluded because it is computationally inefficient
 # def ks_test(timeseries):
 #     """
 #     A timeseries is anomalous if 2 sample Kolmogorov-Smirnov test indicates
@@ -224,7 +223,8 @@ def histogram_bins(timeseries):
 
 #     return False
 
-
+# The method below is excluded because it has no effect on the final skyline
+# scores for NAB
 # def is_anomalously_anomalous(metric_name, ensemble, datapoint):
 #     """
 #     This method runs a meta-analysis on the metric to determine whether the
